@@ -6,7 +6,10 @@ use winapi::lmcons::UNLEN;
 use winapi::winnt::WCHAR;
 use advapi32::GetUserNameW;
 
+// For compatibility with libc types on Unix side
+#[allow(non_camel_case_types)]
 type uid_t = u64;
+#[allow(non_camel_case_types)]
 type gid_t = u64;
     
 pub fn current_user_id() -> uid_t {
