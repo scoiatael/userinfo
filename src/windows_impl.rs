@@ -9,7 +9,8 @@ use winapi::shared::lmcons::UNLEN;
 use winapi::shared::ntdef::WCHAR;
 use winapi::um::winbase::GetUserNameW;
 use winapi::um::lmaccess::{NetUserGetInfo, USER_INFO_2};
-use winapi::shared::minwindef::{LPBYTE};
+use winapi::shared::minwindef::{LPBYTE, LPVOID};
+use winapi::um::lmapibuf::NetApiBufferFree;
 use widestring::U16CString;
 
 // For compatibility with libc types on Unix side
@@ -76,6 +77,10 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
     let wide_user_full_name: U16CString = unsafe {
         U16CString::from_ptr_str(user_info_2.usri2_full_name)
     };
+
+    unsafe {
+        NetApiBufferFree(&mut bufptr as *mut _ as LPVOID);
+    }
 
     match wide_user_full_name.to_string() {
         Ok(user_full_name) => Some(user_full_name),
