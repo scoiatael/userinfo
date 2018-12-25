@@ -1,9 +1,13 @@
 extern crate winapi;
+extern crate widestring;
 
 use std::path::PathBuf;
 use winapi::shared::lmcons::UNLEN;
 use winapi::shared::ntdef::WCHAR;
 use winapi::um::winbase::GetUserNameW;
+use winapi::um::lmaccess::{NetUserGetInfo, USER_INFO_2};
+use winapi::shared::minwindef::{LPBYTE};
+use widestring::U16CString;
 
 // For compatibility with libc types on Unix side
 #[allow(non_camel_case_types)]
@@ -29,15 +33,39 @@ pub fn login_name(_uid: uid_t) -> Option<String> {
     // GetUserNameW sets 2nd argument to number of copied characters
     // including terminating NULL character
     // Source: https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getusernamew
-    let name_len = buf_size as usize - 1;
+    let name_len = buf_size as usize;
     match String::from_utf16(&buf[0..name_len]) {
         Ok(name) => Some(name),
         Err(_) => None,
     }
 }
 
-pub fn user_full_name(_uid: uid_t) -> Option<String> {
-    Some("foobar".to_owned())
+// Source: https://docs.microsoft.com/en-us/windows/desktop/netmgmt/looking-up-a-users-full-name
+pub fn user_full_name(uid: uid_t) -> Option<String> {
+    // TODO: Avoid converting to and from UTF-16
+    let username: Vec<u16> = login_name(uid)?.encode_utf16().collect();
+    let mut bufptr: LPBYTE = std::ptr::null_mut();
+    let status = unsafe {
+        NetUserGetInfo(
+            std::ptr::null(),  // Current host
+            username.as_ptr(), // Current user
+            2,                 // return USER_INFO_2
+            &mut bufptr as *mut LPBYTE,
+        )     
+    };
+    assert!(status == 0);
+    let user_info_2 = unsafe {
+        **std::mem::transmute::<*const LPBYTE, *const *const USER_INFO_2>(&bufptr)
+    };
+
+    let wide_user_full_name: U16CString = unsafe {
+        U16CString::from_ptr_str(user_info_2.usri2_full_name)
+    };
+
+    match wide_user_full_name.to_string() {
+        Ok(user_full_name) => Some(user_full_name),
+        Err(_) => None
+    }
 }
 
 pub fn user_home_directory(_uid: uid_t) -> Option<PathBuf> {
@@ -51,6 +79,7 @@ mod tests {
     #[test]
     fn test_user_id() {
         println!("your name is {:?}", login_name(0));
+        println!("your full name is {:?}", user_full_name(0));
         assert_eq!(current_user_id(), 12);
     }
 }

@@ -4,6 +4,9 @@ extern crate libc;
 #[cfg(windows)]
 extern crate winapi;
 
+#[cfg(windows)]
+extern crate widestring;
+
 #[cfg(unix)]
 mod unix_impl;
 
