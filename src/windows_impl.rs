@@ -2,6 +2,9 @@ extern crate winapi;
 extern crate widestring;
 
 use std::path::PathBuf;
+use std::ptr::{null, null_mut};
+use std::mem::transmute;
+use std::env::var;
 use winapi::shared::lmcons::UNLEN;
 use winapi::shared::ntdef::WCHAR;
 use winapi::um::winbase::GetUserNameW;
@@ -56,10 +59,10 @@ pub fn login_name(uid: uid_t) -> Option<String> {
 // Source: https://docs.microsoft.com/en-us/windows/desktop/netmgmt/looking-up-a-users-full-name
 pub fn user_full_name(uid: uid_t) -> Option<String> {
     let login = login(uid)?;
-    let mut bufptr: LPBYTE = std::ptr::null_mut();
+    let mut bufptr: LPBYTE = null_mut();
     let status = unsafe {
         NetUserGetInfo(
-            std::ptr::null(),   // Current host
+            null(),   // Current host
             login.buf.as_ptr(), // Current user
             2,                  // return USER_INFO_2
             &mut bufptr as *mut LPBYTE,
@@ -67,7 +70,7 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
     };
     assert!(status == 0);
     let user_info_2 = unsafe {
-        **std::mem::transmute::<*const LPBYTE, *const *const USER_INFO_2>(&bufptr)
+        **transmute::<*const LPBYTE, *const *const USER_INFO_2>(&bufptr)
     };
 
     let wide_user_full_name: U16CString = unsafe {
@@ -81,8 +84,8 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
 }
 
 pub fn user_home_directory(_uid: uid_t) -> Option<PathBuf> {
-    let home_path = std::env::var("HOMEPATH").unwrap();
-    let home_drive = std::env::var("HOMEDRIVE").unwrap();
+    let home_path = var("HOMEPATH").unwrap();
+    let home_drive = var("HOMEDRIVE").unwrap();
     let path_buf: PathBuf = [home_drive, home_path].iter().collect();
     Some(path_buf)
 }
