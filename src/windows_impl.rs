@@ -100,10 +100,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_login_name() {
+        assert!(login_name(0).is_some());
+    }
+
+    #[test]
+    fn test_user_full_name() {
+        assert!(user_full_name(0).is_some());
+    }
+
+    #[test]
+    fn test_user_home_directory() {
+        assert!(user_home_directory(0).is_some());
+    }
+
+    #[test]
     fn test_user_id() {
-        println!("your name is {:?}", login_name(0));
-        println!("your full name is {:?}", user_full_name(0));
-        println!("your home dir is {:?}", user_home_directory(0));
         assert_eq!(current_user_id(), 12);
     }
 }
