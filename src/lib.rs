@@ -3,8 +3,6 @@ extern crate libc;
 
 #[cfg(windows)]
 extern crate winapi;
-#[cfg(windows)]
-extern crate advapi32;
 
 #[cfg(unix)]
 mod unix_impl;

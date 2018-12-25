@@ -1,10 +1,9 @@
 extern crate winapi;
-extern crate advapi32;
 
 use std::path::PathBuf;
-use winapi::lmcons::UNLEN;
-use winapi::winnt::WCHAR;
-use advapi32::GetUserNameW;
+use winapi::shared::lmcons::UNLEN;
+use winapi::shared::ntdef::WCHAR;
+use winapi::um::winbase::GetUserNameW;
 
 // For compatibility with libc types on Unix side
 #[allow(non_camel_case_types)]
