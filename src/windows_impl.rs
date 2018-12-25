@@ -23,18 +23,31 @@ pub fn current_group_id() -> gid_t {
     12
 }
 
-pub fn login_name(_uid: uid_t) -> Option<String> {
+struct Login {
+    buf: [WCHAR; (UNLEN + 1) as usize],
+    buflen: u32,
+}
+
+fn login(_uid: uid_t) -> Option<Login> {
     let mut buf: [WCHAR; (UNLEN + 1) as usize] = [0; (UNLEN + 1) as usize];
     let mut buf_size = UNLEN + 1;
     unsafe {
         GetUserNameW(buf.as_mut_ptr(), &mut buf_size);
     }
     assert!(buf.len() >= buf_size as usize);
+    Some(Login{
+        buf: buf,
+        buflen: buf_size,
+    })
+}
+
+pub fn login_name(uid: uid_t) -> Option<String> {
+    let login = login(uid)?;
     // GetUserNameW sets 2nd argument to number of copied characters
     // including terminating NULL character
     // Source: https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getusernamew
-    let name_len = buf_size as usize;
-    match String::from_utf16(&buf[0..name_len]) {
+    let name_len = login.buflen as usize - 1;
+    match String::from_utf16(&login.buf[0..name_len]) {
         Ok(name) => Some(name),
         Err(_) => None,
     }
@@ -42,13 +55,12 @@ pub fn login_name(_uid: uid_t) -> Option<String> {
 
 // Source: https://docs.microsoft.com/en-us/windows/desktop/netmgmt/looking-up-a-users-full-name
 pub fn user_full_name(uid: uid_t) -> Option<String> {
-    // TODO: Avoid converting to and from UTF-16
-    let username: Vec<u16> = login_name(uid)?.encode_utf16().collect();
+    let login = login(uid)?;
     let mut bufptr: LPBYTE = std::ptr::null_mut();
     let status = unsafe {
         NetUserGetInfo(
             std::ptr::null(),  // Current host
-            username.as_ptr(), // Current user
+            login.buf.as_ptr(), // Current user
             2,                 // return USER_INFO_2
             &mut bufptr as *mut LPBYTE,
         )     
