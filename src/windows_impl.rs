@@ -26,7 +26,12 @@ pub fn login_name(_uid: uid_t) -> Option<String> {
     unsafe {
         GetUserNameW(buf.as_mut_ptr(), &mut buf_size);
     }
-    match String::from_utf16(&buf) {
+    assert!(buf.len() >= buf_size as usize);
+    // GetUserNameW sets 2nd argument to number of copied characters
+    // including terminating NULL character
+    // Source: https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getusernamew
+    let name_len = buf_size as usize - 1;
+    match String::from_utf16(&buf[0..name_len]) {
         Ok(name) => Some(name),
         Err(_) => None,
     }
