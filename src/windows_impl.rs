@@ -81,7 +81,10 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
 }
 
 pub fn user_home_directory(_uid: uid_t) -> Option<PathBuf> {
-    Some(PathBuf::from("c:\\"))
+    let home_path = std::env::var("HOMEPATH").unwrap();
+    let home_drive = std::env::var("HOMEDRIVE").unwrap();
+    let path_buf: PathBuf = [home_drive, home_path].iter().collect();
+    Some(path_buf)
 }
 
 #[cfg(test)]
@@ -92,6 +95,7 @@ mod tests {
     fn test_user_id() {
         println!("your name is {:?}", login_name(0));
         println!("your full name is {:?}", user_full_name(0));
+        println!("your home dir is {:?}", user_home_directory(0));
         assert_eq!(current_user_id(), 12);
     }
 }
