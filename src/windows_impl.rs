@@ -59,9 +59,9 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
     let mut bufptr: LPBYTE = std::ptr::null_mut();
     let status = unsafe {
         NetUserGetInfo(
-            std::ptr::null(),  // Current host
+            std::ptr::null(),   // Current host
             login.buf.as_ptr(), // Current user
-            2,                 // return USER_INFO_2
+            2,                  // return USER_INFO_2
             &mut bufptr as *mut LPBYTE,
         )     
     };
