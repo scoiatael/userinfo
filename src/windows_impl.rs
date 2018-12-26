@@ -35,6 +35,7 @@ fn convert_sid_to_string(sid: PSID) -> Option<String> {
     let wide_user: U16CString = unsafe {
         U16CString::from_ptr_str(bufptr)
     };
+    // TODO: Check for memory leaks
     unsafe {
         LocalFree(bufptr as *const _ as LPVOID)
     };
@@ -167,6 +168,7 @@ pub fn user_full_name(uid: uid_t) -> Option<String> {
         U16CString::from_ptr_str(user_info_2.usri2_full_name)
     };
 
+    // TODO: Check for memory leaks
     unsafe {
         NetApiBufferFree(&mut bufptr as *mut _ as LPVOID);
     }
