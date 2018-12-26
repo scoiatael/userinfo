@@ -6,25 +6,114 @@ use std::ptr::{null, null_mut};
 use std::mem::transmute;
 use std::env::var;
 use winapi::shared::lmcons::UNLEN;
-use winapi::shared::ntdef::WCHAR;
-use winapi::um::winbase::GetUserNameW;
+use winapi::shared::ntdef::{WCHAR, HANDLE, LPWSTR};
+use winapi::um::winbase::{GetUserNameW, LocalFree};
 use winapi::um::lmaccess::{NetUserGetInfo, USER_INFO_2};
-use winapi::shared::minwindef::{LPBYTE, LPVOID};
+use winapi::shared::minwindef::{LPBYTE, LPVOID, DWORD};
 use winapi::um::lmapibuf::NetApiBufferFree;
+use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
+use winapi::um::winnt::{TOKEN_QUERY, TOKEN_USER, TOKEN_PRIMARY_GROUP, TokenUser, TokenPrimaryGroup, PSID, TOKEN_INFORMATION_CLASS};
+use winapi::um::securitybaseapi::GetTokenInformation;
+use winapi::shared::sddl::ConvertSidToStringSidW;
+use winapi::um::errhandlingapi::GetLastError;
 use widestring::U16CString;
 
 // For compatibility with libc types on Unix side
 #[allow(non_camel_case_types)]
-type uid_t = u64;
+type uid_t = String;
 #[allow(non_camel_case_types)]
-type gid_t = u64;
-    
+type gid_t = String;
+
+fn convert_sid_to_string(sid: PSID) -> Option<String> {
+    let mut bufptr: LPWSTR = null_mut();
+    assert_eq!(
+        1, 
+        unsafe { 
+            ConvertSidToStringSidW(sid, &mut bufptr as *mut _ as *mut LPWSTR)
+        }
+    );
+    let wide_user: U16CString = unsafe {
+        U16CString::from_ptr_str(bufptr)
+    };
+    unsafe {
+        LocalFree(bufptr as *const _ as LPVOID)
+    };
+    wide_user.to_string().ok()
+}
+
+fn get_process_token() -> HANDLE {
+    let mut h_token: HANDLE = null_mut();
+    assert_eq!(
+        1,
+        unsafe { 
+            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut h_token)
+        }
+    );
+    h_token
+}
+
+fn required_bytes(query: TOKEN_INFORMATION_CLASS) -> u32 {
+    let mut ret_length: DWORD = 0;
+    assert_eq!(
+        0, 
+        unsafe { 
+            GetTokenInformation(
+                get_process_token(), 
+                query, 
+                null_mut(), 
+                0,
+                &mut ret_length
+            )
+        }
+    );
+    assert_eq!(
+        122,
+        unsafe { GetLastError() }
+    );
+    ret_length
+}
+
 pub fn current_user_id() -> uid_t {
-    12
+    // Source: https://docs.microsoft.com/en-us/windows/desktop/secauthz/searching-for-a-sid-in-an-access-token-in-c--
+    let h_token = get_process_token();
+    let sizeof_user_info = required_bytes(TokenUser);
+    let mut p_user_info: TOKEN_USER = unsafe { std::mem::zeroed() }; // FIXME: Allocate sizeof_user_info bytes
+    let mut ret_length: DWORD = 0;
+    assert_eq!(
+        1, 
+        unsafe { 
+            GetTokenInformation(
+                h_token, 
+                TokenUser, 
+                &mut p_user_info as *mut _ as LPVOID, 
+                sizeof_user_info,
+                &mut ret_length
+            )
+        }
+    );
+    // TODO: Handle error
+    convert_sid_to_string(p_user_info.User.Sid).unwrap()
 }
 
 pub fn current_group_id() -> gid_t {
-    12
+    let h_token = get_process_token();
+    let sizeof_group_info = required_bytes(TokenPrimaryGroup);
+    let mut p_group_info: TOKEN_PRIMARY_GROUP = unsafe { std::mem::zeroed() }; // FIXME: Allocate sizeof_group_info bytes
+    let mut ret_length: DWORD = 0;
+    assert_eq!(
+        1, 
+        unsafe { 
+            GetTokenInformation(
+                h_token, 
+                TokenPrimaryGroup, 
+                &mut p_group_info as *mut _ as LPVOID, 
+                sizeof_group_info,
+                &mut ret_length
+            )
+        }
+    );
+    // TODO: Handle error
+    convert_sid_to_string(p_group_info.PrimaryGroup).unwrap()
 }
 
 struct Login {
@@ -101,21 +190,28 @@ mod tests {
 
     #[test]
     fn test_login_name() {
-        assert!(login_name(0).is_some());
+        assert!(login_name("".to_string()).is_some());
     }
 
     #[test]
     fn test_user_full_name() {
-        assert!(user_full_name(0).is_some());
+        assert!(user_full_name("".to_string()).is_some());
     }
 
     #[test]
     fn test_user_home_directory() {
-        assert!(user_home_directory(0).is_some());
+        assert!(user_home_directory("".to_string()).is_some());
     }
 
     #[test]
     fn test_user_id() {
-        assert_eq!(current_user_id(), 12);
+        println!("UID: {:?}", current_user_id());
+        assert_ne!(current_user_id(), "");
+    }
+
+    #[test]
+    fn test_group_id() {
+        println!("GID: {:?}", current_group_id());
+        assert_ne!(current_group_id(), "");
     }
 }
