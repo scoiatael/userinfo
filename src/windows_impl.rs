@@ -9,7 +9,7 @@ use winapi::shared::lmcons::UNLEN;
 use winapi::shared::ntdef::{WCHAR, HANDLE, LPWSTR};
 use winapi::um::winbase::{GetUserNameW, LocalFree};
 use winapi::um::lmaccess::{NetUserGetInfo, USER_INFO_2};
-use winapi::shared::minwindef::{LPBYTE, LPVOID, DWORD};
+use winapi::shared::minwindef::{LPBYTE, LPVOID, DWORD, BOOL};
 use winapi::um::lmapibuf::NetApiBufferFree;
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
 use winapi::um::winnt::{TOKEN_QUERY, TOKEN_USER, TOKEN_PRIMARY_GROUP, TokenUser, TokenPrimaryGroup, PSID, TOKEN_INFORMATION_CLASS};
@@ -24,10 +24,16 @@ type uid_t = String;
 #[allow(non_camel_case_types)]
 type gid_t = String;
 
+// Source: https://docs.microsoft.com/en-us/windows/desktop/Debug/system-error-codes--0-499-
+const ERROR_INSUFFICIENT_BUFFER: DWORD = 122;
+
+const C_SYSCALL_OK: BOOL = 1;
+const C_SYSCALL_ERR: BOOL = 0;
+
 fn convert_sid_to_string(sid: PSID) -> Option<String> {
     let mut bufptr: LPWSTR = null_mut();
     assert_eq!(
-        1, 
+        C_SYSCALL_OK, 
         unsafe { 
             ConvertSidToStringSidW(sid, &mut bufptr as *mut _ as *mut LPWSTR)
         }
@@ -45,7 +51,7 @@ fn convert_sid_to_string(sid: PSID) -> Option<String> {
 fn get_process_token() -> HANDLE {
     let mut h_token: HANDLE = null_mut();
     assert_eq!(
-        1,
+        C_SYSCALL_OK,
         unsafe { 
             OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut h_token)
         }
@@ -56,7 +62,7 @@ fn get_process_token() -> HANDLE {
 fn required_bytes(query: TOKEN_INFORMATION_CLASS) -> u32 {
     let mut ret_length: DWORD = 0;
     assert_eq!(
-        0, 
+        C_SYSCALL_ERR, 
         unsafe { 
             GetTokenInformation(
                 get_process_token(), 
@@ -68,7 +74,7 @@ fn required_bytes(query: TOKEN_INFORMATION_CLASS) -> u32 {
         }
     );
     assert_eq!(
-        122,
+        ERROR_INSUFFICIENT_BUFFER,
         unsafe { GetLastError() }
     );
     ret_length
@@ -81,7 +87,7 @@ pub fn current_user_id() -> uid_t {
     let mut p_user_info: TOKEN_USER = unsafe { std::mem::zeroed() }; // FIXME: Allocate sizeof_user_info bytes
     let mut ret_length: DWORD = 0;
     assert_eq!(
-        1, 
+        C_SYSCALL_OK, 
         unsafe { 
             GetTokenInformation(
                 h_token, 
@@ -102,7 +108,7 @@ pub fn current_group_id() -> gid_t {
     let mut p_group_info: TOKEN_PRIMARY_GROUP = unsafe { std::mem::zeroed() }; // FIXME: Allocate sizeof_group_info bytes
     let mut ret_length: DWORD = 0;
     assert_eq!(
-        1, 
+        C_SYSCALL_OK, 
         unsafe { 
             GetTokenInformation(
                 h_token, 
