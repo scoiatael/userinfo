@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::mem::transmute;
 use std::env::var;
+use std::fmt;
 use winapi::shared::lmcons::UNLEN;
 use winapi::shared::ntdef::{WCHAR, HANDLE, LPWSTR};
 use winapi::um::winbase::{GetUserNameW, LocalFree};
@@ -20,9 +21,25 @@ use widestring::U16CString;
 
 // For compatibility with libc types on Unix side
 #[allow(non_camel_case_types)]
-type uid_t = String;
+#[derive(Clone, Copy, Debug, PartialEq)] // TODO: is deriving Clone ok here?
+pub struct uid_t(PSID);
+impl fmt::Display for uid_t {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let sid_string = convert_sid_to_string(self.0).unwrap(); // FIXME: Error handling?
+        write!(f, "{}", sid_string)
+    }
+}
+
+// For compatibility with libc types on Unix side
 #[allow(non_camel_case_types)]
-type gid_t = String;
+#[derive(Clone, Copy, Debug, PartialEq)]  // TODO: is deriving Clone ok here?
+pub struct gid_t(PSID);
+impl fmt::Display for gid_t {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let sid_string = convert_sid_to_string(self.0).unwrap(); // FIXME: Error handling?
+        write!(f, "{}", sid_string)
+    }
+}
 
 // Source: https://docs.microsoft.com/en-us/windows/desktop/Debug/system-error-codes--0-499-
 const ERROR_INSUFFICIENT_BUFFER: DWORD = 122;
@@ -30,8 +47,9 @@ const ERROR_INSUFFICIENT_BUFFER: DWORD = 122;
 const C_SYSCALL_OK: BOOL = 1;
 const C_SYSCALL_ERR: BOOL = 0;
 
-fn convert_sid_to_string(sid: PSID) -> Option<String> {
+fn convert_sid_to_string(sid: PSID) ->  Result<String, std::string::FromUtf16Error> {
     let mut bufptr: LPWSTR = null_mut();
+    // TODO: Handle other errors
     assert_eq!(
         C_SYSCALL_OK, 
         unsafe { 
@@ -45,7 +63,7 @@ fn convert_sid_to_string(sid: PSID) -> Option<String> {
     unsafe {
         LocalFree(bufptr as *const _ as LPVOID)
     };
-    wide_user.to_string().ok()
+    wide_user.to_string()
 }
 
 fn get_process_token() -> HANDLE {
@@ -98,8 +116,7 @@ pub fn current_user_id() -> uid_t {
             )
         }
     );
-    // TODO: Handle error
-    convert_sid_to_string(p_user_info.User.Sid).unwrap()
+    uid_t(p_user_info.User.Sid)
 }
 
 pub fn current_group_id() -> gid_t {
@@ -119,8 +136,7 @@ pub fn current_group_id() -> gid_t {
             )
         }
     );
-    // TODO: Handle error
-    convert_sid_to_string(p_group_info.PrimaryGroup).unwrap()
+    gid_t(p_group_info.PrimaryGroup)
 }
 
 struct Login {
@@ -198,28 +214,30 @@ mod tests {
 
     #[test]
     fn test_login_name() {
-        assert!(login_name("".to_string()).is_some());
+        assert!(login_name(current_user_id()).is_some());
     }
 
     #[test]
     fn test_user_full_name() {
-        assert!(user_full_name("".to_string()).is_some());
+        assert!(user_full_name(current_user_id()).is_some());
     }
 
     #[test]
     fn test_user_home_directory() {
-        assert!(user_home_directory("".to_string()).is_some());
+        assert!(user_home_directory(current_user_id()).is_some());
     }
 
     #[test]
     fn test_user_id() {
-        println!("UID: {:?}", current_user_id());
-        assert_ne!(current_user_id(), "");
+        let empty_sid: PSID = unsafe { std::mem::zeroed() };
+        println!("UID: {}", current_user_id());
+        assert_ne!(current_user_id(), uid_t(empty_sid));
     }
 
     #[test]
     fn test_group_id() {
-        println!("GID: {:?}", current_group_id());
-        assert_ne!(current_group_id(), "");
+        let empty_sid: PSID = unsafe { std::mem::zeroed() };
+        println!("GID: {}", current_group_id());
+        assert_ne!(current_group_id(), gid_t(empty_sid));
     }
 }
